@@ -94,7 +94,7 @@ const [showOrganizeModal, setShowOrganizeModal] = useState(false);
         {/* 左侧导航 */}
         <aside className="w-64 border-r bg-white p-6">
           <div className="mb-10">
-            <h1 className="text-2xl font-bold">SSEC-Task</h1>
+            <h1 className="text-2xl font-bold">SSEC-Task · 在线测试</h1>
             <p className="mt-1 text-sm text-gray-500">
               配管工作协同平台
             </p>
