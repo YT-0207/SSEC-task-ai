@@ -733,7 +733,13 @@ if (item.includes("今天")) {
 
 // 周五
 } else if (item.includes("周五")) {
+
   deadline = "周五";
+
+// 周一
+} else if (item.includes("周一")) {
+
+  deadline = "周一";
 
 // 具体日期：9月30日、10月15日、2026年10月20日
 } else {
