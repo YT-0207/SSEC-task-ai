@@ -731,15 +731,40 @@ if (item.includes("今天")) {
 } else if (item.includes("下周一")) {
   deadline = "下周一";
 
+// 周一
+} else if (item.includes("周一")) {
+
+  deadline = "周一";
+
+// 周二
+} else if (item.includes("周二")) {
+
+  deadline = "周二";
+
+// 周三
+} else if (item.includes("周三")) {
+
+  deadline = "周三";
+
+// 周四
+} else if (item.includes("周四")) {
+
+  deadline = "周四";
+
 // 周五
 } else if (item.includes("周五")) {
 
   deadline = "周五";
 
-// 周一
-} else if (item.includes("周一")) {
+// 周六
+} else if (item.includes("周六")) {
 
-  deadline = "周一";
+  deadline = "周六";
+
+// 周日
+} else if (item.includes("周日")) {
+
+  deadline = "周日";
 
 // 具体日期：9月30日、10月15日、2026年10月20日
 } else {
