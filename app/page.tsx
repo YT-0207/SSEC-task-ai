@@ -172,12 +172,14 @@ setDraftTasks={setDraftTasks}
     title="任务中心"
     description="查看和管理所有项目任务。"
     confirmedTasks={confirmedTasks}
+    setConfirmedTasks={setConfirmedTasks}
     taskDetails={taskDetails}
     setTaskDetails={setTaskDetails}
     taskStatus={taskStatus}
     setTaskStatus={setTaskStatus}
   
     projects={projects}
+    people={people}
   />
 )}
 
@@ -189,6 +191,7 @@ setDraftTasks={setDraftTasks}
     taskDetails={taskDetails}
       taskStatus={taskStatus}
     projects={projects}
+    people={people}
     setTaskStatus={setTaskStatus}
   />
 )}
@@ -514,19 +517,23 @@ const [showOrganizeModal, setShowOrganizeModal] = useState(false);
 
 const [latestDraftConfirmed, setLatestDraftConfirmed] = useState(false);
 const [taskFilter, setTaskFilter] = useState("全部");
+const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("全部");
 const [taskSearch, setTaskSearch] = useState("");
 const [editingTask, setEditingTask] = useState("");
 const [editingTaskText, setEditingTaskText] = useState("");
 const saveEditedTask = () => {
   if (!editingTask || !editingTaskText.trim()) return;
 
-const newTasks = Array.from(
-  new Set(
-    (confirmedTasks || []).map((item) =>
-      item === editingTask ? editingTaskText.trim() : item
+  const newTaskText = editingTaskText.trim();
+
+  // 1. 更新任务列表
+  const newTasks = Array.from(
+    new Set(
+      (confirmedTasks || []).map((item) =>
+        item === editingTask ? newTaskText : item
+      )
     )
-  )
-);
+  );
 
   setConfirmedTasks?.(newTasks);
 
@@ -535,8 +542,51 @@ const newTasks = Array.from(
     JSON.stringify(newTasks)
   );
 
-  setEditingTask("");
+  // 2. 同步更新任务详情
+  setTaskDetails?.((details) => {
+    if (!details?.[editingTask]) {
+      return details;
+    }
 
+    const newDetails = {
+      ...details,
+      [newTaskText]: details[editingTask],
+    };
+
+    delete newDetails[editingTask];
+
+    localStorage.setItem(
+      "taskDetails",
+      JSON.stringify(newDetails)
+    );
+
+    return newDetails;
+  });
+
+  // 3. 同步更新任务状态
+  setTaskStatus?.((statuses) => {
+    if (!statuses?.[editingTask]) {
+      return statuses;
+    }
+
+    const newStatuses = {
+      ...statuses,
+      [newTaskText]: statuses[editingTask],
+    };
+
+    delete newStatuses[editingTask];
+
+    localStorage.setItem(
+      "taskStatus",
+      JSON.stringify(newStatuses)
+    );
+
+    return newStatuses;
+  });
+
+  // 4. 退出编辑状态
+  setEditingTask("");
+  setEditingTaskText("");
 };
 const [taskProjectFilter, setTaskProjectFilter] = useState("全部");
 const [myTaskFilter, setMyTaskFilter] = useState("全部");
@@ -701,37 +751,47 @@ if (detectedProject !== "未指定") {
   task = task.replace(/负责/g, "");
 }
 
-  // 5. 删除句子前面的会议背景
+  // 5. 删除句子前面的会议/工作安排背景
   task = task
     .replace(/^.*?项目会议确定[，,：:]?\s*/, "")
+    .replace(/^.*?工作安排[：:，,]?\s*/, "")
     .trim();
 
   // 6. 删除“负责”开头
-  task = task.replace(/^负责/, "").trim();
-
-  // 7. 删除截止时间相关表达
- task = task
-  .replace(/下周一之前/g, "")
-  .replace(/下周一/g, "")
-  .replace(/周五之前/g, "")
-  .replace(/周五/g, "")
-  .replace(/明天之前/g, "")
-  .replace(/明天/g, "")
-  .replace(/今天之前/g, "")
-  .replace(/今天的/g, "")
-  .replace(/今天/g, "");
-
-  // 8. 删除常见的截止动作词
   task = task
-    .replace(/完成$/, "")
-    .replace(/提交$/, "")
+    .replace(/^负责/, "")
     .trim();
 
+  // 7. 删除截止时间相关表达
+  task = task
+    .replace(/下周一之前/g, "")
+    .replace(/下周一前/g, "")
+    .replace(/下周一/g, "")
+    .replace(/周五之前/g, "")
+    .replace(/周五前/g, "")
+    .replace(/周五/g, "")
+    .replace(/明天之前/g, "")
+    .replace(/明天前/g, "")
+    .replace(/明天/g, "")
+    .replace(/今天之前/g, "")
+    .replace(/今天前/g, "")
+    .replace(/今天的/g, "")
+    .replace(/今天/g, "");
+
+  // 8. 删除截止时间后的附加动作
+  task = task
+    .replace(/并提交/g, "")
+    .replace(/提交/g, "")
+    .replace(/完成/g, "")
+    .replace(/，后发到项目群/g, "")
+    .replace(/后发到项目群/g, "")
+    .trim();
   // 9. 清理多余标点和空格
 task = task
   .replace(/^[，,；;。！？：:\s]+/, "")
   .replace(/[，,；;。！？：:\s]+$/, "")
   .trim();
+  console.log("最终任务文字：", task);
  results.push({
   task,
   assignee,
@@ -742,33 +802,19 @@ task = task
   return results;
 });
 
-// 保存多条任务
-console.log("最终解析任务：", parsedTasks);
-setDraftTasks?.(parsedTasks);
+// 保存 AI 解析出的多条任务
+  console.log("最终解析任务：", parsedTasks);
+  setDraftTasks?.(parsedTasks);
 
-// 同时保留第一条任务到原来的变量
-if (parsedTasks.length > 0) {
-  setDraftTask?.(parsedTasks[0].task);
-  setDraftAssignee?.(parsedTasks[0].assignee);
-  setDraftDeadline?.(parsedTasks[0].deadline);
-}
+  // 同时保留第一条任务到原来的变量
+  // 兼容原来的单任务显示逻辑
+  if (parsedTasks.length > 0) {
+    setDraftTask?.(parsedTasks[0].task);
+    setDraftAssignee?.(parsedTasks[0].assignee);
+    setDraftDeadline?.(parsedTasks[0].deadline);
+  }
 
-setShowOrganizeModal(true);
-
-// 保存多条任务
-setDraftTasks?.(parsedTasks);
-
-// 同时保留第一条任务到原来的变量
-// 这样你原来的确认功能暂时不会失效
-if (parsedTasks.length > 0) {
-setDraftTask?.(parsedTasks[0].task);
-
-setDraftAssignee?.(parsedTasks[0].assignee);
-
-setDraftDeadline?.(parsedTasks[0].deadline);
-}
-
-setShowOrganizeModal(true);
+  setShowOrganizeModal(true);
 }}
   className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white"
 >
@@ -961,21 +1007,18 @@ setShowOrganizeModal(true);
   }
 
   if (title === "AI 任务草稿") {
-    return (
-      <div>
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold">
-            AI 任务草稿
-          </h2>
+  console.log(
+    "AI草稿页面收到的draftTasks：",
+    JSON.stringify(draftTasks, null, 2)
+  );
 
-          <p className="mt-2 text-gray-500">
-            AI 根据你收集的信息生成的任务草稿。
-          </p>
-        </div>
+  return (
+    <div>
+      {/* 你原来的代码 */}
 
-        <div className="space-y-4">
-       {draftTasks && draftTasks.length > 0 && (
-  <div className="mb-5 rounded-xl border bg-white p-6">
+      <div className="space-y-4">
+        {draftTasks && draftTasks.length > 0 && (
+          <div className="mb-5 rounded-xl border bg-white p-6">
     <div className="flex items-center justify-between">
       <div>
         <h3 className="text-lg font-semibold">
@@ -1380,9 +1423,13 @@ console.log("当前项目：", projects);
       }}
       className="rounded-lg border px-3 py-1.5 text-sm"
     >
-      <option value="张三">张三</option>
-      <option value="李四">李四</option>
-      <option value="王五">王五</option>
+<option value="待指定">待指定</option>
+
+{(people || []).map((person) => (
+  <option key={person} value={person}>
+    {person}
+  </option>
+))}
     </select>
   </div>
 
@@ -1699,10 +1746,14 @@ const filteredTasks = allTasks.filter((task) => {
     (taskDetails?.[task]?.project || "未指定") === taskProjectFilter;
 
   const searchMatch =
-    taskSearch.trim() === "" ||
-    task.toLowerCase().includes(taskSearch.trim().toLowerCase());
+  taskSearch.trim() === "" ||
+  task.toLowerCase().includes(taskSearch.trim().toLowerCase());
 
-  return statusMatch && projectMatch && searchMatch;
+const assigneeMatch =
+  taskAssigneeFilter === "全部" ||
+  (taskDetails?.[task]?.assignee || "待指定") === taskAssigneeFilter;
+
+return statusMatch && projectMatch && searchMatch && assigneeMatch;
 });
 
  const todoCount = allTasks.filter(
@@ -1823,7 +1874,30 @@ const progressPercent =
   placeholder="搜索任务……"
   className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-black"
 />
+<select
+  value={taskFilter}
+  onChange={(e) => setTaskFilter(e.target.value)}
+  className="rounded-lg border px-3 py-2 text-sm"
+>
+  <option value="全部">全部状态</option>
+  <option value="待处理">待处理</option>
+  <option value="进行中">进行中</option>
+  <option value="已完成">已完成</option>
+</select>
+<select
+  value={taskAssigneeFilter}
+  onChange={(e) => setTaskAssigneeFilter(e.target.value)}
+  className="rounded-lg border px-3 py-2 text-sm"
+>
+  <option value="全部">全部负责人</option>
+  <option value="待指定">待指定</option>
 
+  {(people || []).map((person) => (
+    <option key={person} value={person}>
+      {person}
+    </option>
+  ))}
+</select>
     <select
       value={taskProjectFilter}
       onChange={(e) => setTaskProjectFilter(e.target.value)}
@@ -1903,35 +1977,38 @@ const progressPercent =
                         <div className="flex items-center gap-2">
   <span>负责人：</span>
 
-  <select
-    value={taskDetails?.[task]?.assignee || "待指定"}
-    onChange={(e) => {
-      const newAssignee = e.target.value;
+ <select
+  value={taskDetails?.[task]?.assignee || "待指定"}
+  onChange={(e) => {
+    const newAssignee = e.target.value;
 
-      setTaskDetails?.((details) => {
-        const newDetails = {
-          ...details,
-          [task]: {
-            ...details[task],
-            assignee: newAssignee,
-          },
-        };
+    setTaskDetails?.((details) => {
+      const newDetails = {
+        ...details,
+        [task]: {
+          ...details[task],
+          assignee: newAssignee,
+        },
+      };
 
-        localStorage.setItem(
-          "taskDetails",
-          JSON.stringify(newDetails)
-        );
+      localStorage.setItem(
+        "taskDetails",
+        JSON.stringify(newDetails)
+      );
 
-        return newDetails;
-      });
-    }}
-    className="rounded border px-2 py-1 text-sm"
-  >
-    <option value="待指定">待指定</option>
-    <option value="张三">张三</option>
-    <option value="李四">李四</option>
-    <option value="王五">王五</option>
-  </select>
+      return newDetails;
+    });
+  }}
+  className="rounded border px-2 py-1 text-sm"
+>
+  <option value="待指定">待指定</option>
+
+  {(people || []).map((person) => (
+    <option key={person} value={person}>
+      {person}
+    </option>
+  ))}
+</select>
 </div>
 
                        <div className="flex items-center gap-2">
@@ -2003,6 +2080,36 @@ const progressPercent =
       </option>
     ))}
   </select>
+</div>
+<div className="flex items-center gap-2">
+  <span>备注：</span>
+
+  <input
+    type="text"
+    value={taskNotes?.[task] || ""}
+    onChange={(e) => {
+  const newNote = e.target.value;
+
+  setTaskNotes((notes) => {
+    const newNotes = { ...notes };
+
+    if (newNote.trim() === "") {
+      delete newNotes[task];
+    } else {
+      newNotes[task] = newNote;
+    }
+
+    localStorage.setItem(
+      "taskNotes",
+      JSON.stringify(newNotes)
+    );
+
+    return newNotes;
+  });
+}}
+    placeholder="添加备注"
+    className="flex-1 rounded border px-2 py-1 text-sm"
+  />
 </div>
                         <div className="flex items-center gap-3">
                           <p className="text-sm text-gray-500">
@@ -2189,16 +2296,71 @@ const progressPercent =
   </button>
 </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {(people || []).map((person) => (
-          <span
-            key={person}
-            className="rounded-full bg-gray-100 px-3 py-1 text-sm"
-          >
-            {person}
-          </span>
-        ))}
-      </div>
+<div className="mt-3 flex flex-wrap gap-2">
+  {(people || []).map((person) => (
+    <div
+      key={person}
+      className="flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-sm"
+    >
+      <span>{person}</span>
+
+      <button
+        onClick={() => {
+          const newName = window.prompt(
+            "请输入新的成员姓名",
+            person
+          );
+
+          if (!newName?.trim()) return;
+
+          setPeople?.((currentPeople) => {
+            const trimmedName = newName.trim();
+
+            const newPeople = currentPeople.map((item) =>
+              item === person ? trimmedName : item
+            );
+
+            localStorage.setItem(
+              "people",
+              JSON.stringify(newPeople)
+            );
+
+            return newPeople;
+          });
+        }}
+        className="text-xs text-gray-600 hover:text-black"
+      >
+        编辑
+      </button>
+
+      <button
+        onClick={() => {
+          const confirmed = window.confirm(
+            `确定要删除成员“${person}”吗？`
+          );
+
+          if (!confirmed) return;
+
+          setPeople?.((currentPeople) => {
+            const newPeople = currentPeople.filter(
+              (item) => item !== person
+            );
+
+            localStorage.setItem(
+              "people",
+              JSON.stringify(newPeople)
+            );
+
+            return newPeople;
+          });
+        }}
+        className="text-xs text-gray-400 hover:text-red-600"
+      >
+        删除
+      </button>
+    </div>
+  ))}
+</div>
     </div>
 
     {projects && projects.length > 0 ? (
@@ -2435,10 +2597,13 @@ const progressPercent =
     }}
     className="rounded border px-2 py-1 text-xs"
   >
-    <option value="待指定">待指定</option>
-    <option value="张三">张三</option>
-    <option value="李四">李四</option>
-    <option value="王五">王五</option>
+<option value="待指定">待指定</option>
+
+{(people || []).map((person) => (
+  <option key={person} value={person}>
+    {person}
+  </option>
+))}
   </select>
 </div>
  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
