@@ -715,21 +715,72 @@ const parsedTasks = taskTexts.flatMap((item) => {
 
 const assignee = detectedPerson || "待指定";
 
-  // 2. 识别截止时间
-  let deadline = "待识别";
+// 2. 识别截止时间
 
-  if (item.includes("下周一")) {
-    deadline = "下周一";
-  } else if (item.includes("周五")) {
-    deadline = "周五";
-  } else if (item.includes("明天")) {
-    deadline = "明天";
-  } else if (
-  item.includes("今天") &&
-  !item.includes("今天的")
-) {
+let deadline = "待识别";
+
+// 今天
+if (item.includes("今天")) {
   deadline = "今天";
+
+// 明天
+} else if (item.includes("明天")) {
+  deadline = "明天";
+
+// 下周一
+} else if (item.includes("下周一")) {
+  deadline = "下周一";
+
+// 周五
+} else if (item.includes("周五")) {
+  deadline = "周五";
+
+// 具体日期：9月30日、10月15日、2026年10月20日
+} else {
+  const dateMatch = item.match(
+    /(\d{4}年)?(\d{1,2})月(\d{1,2})日/
+  );
+
+  if (dateMatch) {
+    const year = dateMatch[1];
+    const month = dateMatch[2];
+    const day = dateMatch[3];
+
+    deadline = year
+      ? `${year}${month}月${day}日`
+      : `${month}月${day}日`;
+
+  } else {
+
+    // 具体日期：9/30、10/12
+    const slashMatch = item.match(
+      /(\d{1,2})\/(\d{1,2})/
+    );
+
+    if (slashMatch) {
+      const month = slashMatch[1];
+      const day = slashMatch[2];
+
+      deadline = `${month}月${day}日`;
+
+    } else {
+
+      // 本月30日、本月30日前
+      const thisMonthMatch = item.match(
+        /本月(\d{1,2})日?/
+      );
+
+      if (thisMonthMatch) {
+        const day = thisMonthMatch[1];
+
+        deadline = `本月${day}日`;
+      }
+    }
+  }
 }
+
+console.log("【日期测试】原始任务：", item);
+console.log("【日期测试】识别结果：", deadline);
   // 3. 识别所属项目
   const detectedProject =
     (projects || []).find((project) =>
@@ -762,21 +813,43 @@ if (detectedProject !== "未指定") {
     .replace(/^负责/, "")
     .trim();
 
-  // 7. 删除截止时间相关表达
-  task = task
-    .replace(/下周一之前/g, "")
-    .replace(/下周一前/g, "")
-    .replace(/下周一/g, "")
-    .replace(/周五之前/g, "")
-    .replace(/周五前/g, "")
-    .replace(/周五/g, "")
-    .replace(/明天之前/g, "")
-    .replace(/明天前/g, "")
-    .replace(/明天/g, "")
-    .replace(/今天之前/g, "")
-    .replace(/今天前/g, "")
-    .replace(/今天的/g, "")
-    .replace(/今天/g, "");
+ // 7. 删除截止时间相关表达
+task = task
+  .replace(/下周一之前/g, "")
+  .replace(/下周一前/g, "")
+  .replace(/下周一/g, "")
+  .replace(/周五之前/g, "")
+  .replace(/周五前/g, "")
+  .replace(/周五/g, "")
+  .replace(/明天之前/g, "")
+  .replace(/明天前/g, "")
+  .replace(/明天/g, "")
+  .replace(/今天之前/g, "")
+  .replace(/今天前/g, "")
+  .replace(/今天的/g, "")
+  .replace(/今天/g, "")
+.replace(/(?:\d{4}年)?\d{1,2}月\d{1,2}日之前/g, "")
+.replace(/(?:\d{4}年)?\d{1,2}月\d{1,2}日前/g, "")
+.replace(/(?:\d{4}年)?\d{1,2}月\d{1,2}日/g, "")
+.replace(/\d{1,2}\/\d{1,2}之前/g, "")
+.replace(/\d{1,2}\/\d{1,2}前/g, "")
+.replace(/\d{1,2}\/\d{1,2}/g, "")
+.replace(/本月\d{1,2}日之前/g, "")
+.replace(/本月\d{1,2}日前/g, "")
+.replace(/本月\d{1,2}日?/g, "")
+.replace(/之前/g, "")
+.replace(/前/g, "");
+
+// 删除具体日期
+// 2026年10月20日
+// 10月20日
+// 9/30
+// 10/12
+// 本月30日
+task = task
+  .replace(/(?:\d{4}年)?\d{1,2}月\d{1,2}日/g, "")
+  .replace(/\d{1,2}\/\d{1,2}/g, "")
+  .replace(/本月\d{1,2}日?/g, "");
 
   // 8. 删除截止时间后的附加动作
   task = task
@@ -805,7 +878,7 @@ task = task
 // 保存 AI 解析出的多条任务
   console.log("最终解析任务：", parsedTasks);
   setDraftTasks?.(parsedTasks);
-
+console.log("【最终日期测试】第一条截止时间：", parsedTasks[0]?.deadline);
   // 同时保留第一条任务到原来的变量
   // 兼容原来的单任务显示逻辑
   if (parsedTasks.length > 0) {
